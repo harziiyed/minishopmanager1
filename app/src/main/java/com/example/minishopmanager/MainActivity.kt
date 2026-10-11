@@ -1,115 +1,140 @@
+
 package com.example.minishopmanager
-import android.content.Context
+
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
-import android.widget.Button
+import android.widget.BaseAdapter
 import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
-import android.content.Intent
 import androidx.activity.ComponentActivity
+import org.json.JSONObject
 
-data class Product(
-    val name: String,
-    val image: Int
+data class Produit(
+    val nom: String,
+    val prix: Int,
+    val image: String
 )
 
 class MainActivity : ComponentActivity() {
 
+    private lateinit var listViewProducts: ListView
+    private lateinit var tvCatalogTitle: TextView
+    private val produits = mutableListOf<Produit>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.d("LIFECYCLE", "onCreate appelé")
-
         setContentView(R.layout.activity_main)
 
-        val products = listOf(
-            Product("Téléphone", R.drawable.product_phone),
-            Product("Casque Bluetooth", R.drawable.product_headphones),
-            Product("Montre connectée", R.drawable.product_watch),
-            Product("Chargeur USB", R.drawable.product_charger),
-            Product("Accessoires", R.drawable.product_case),
-            Product("Cosmétiques", R.drawable.product_cosmetics)
-        )
+        Log.d("MiniShop", "MainActivity créée")
 
-        val listView = findViewById<ListView>(R.id.listViewProducts)
+        listViewProducts = findViewById(R.id.listViewProducts)
+        tvCatalogTitle = findViewById(R.id.tvCatalogTitle)
 
-        val adapter = ProductAdapter(this, products)
-        listView.adapter = adapter
+        val nomUtilisateur =
+            intent.getStringExtra("USER_NAME") ?: ""
 
-        listView.setOnItemClickListener { _, _, position, _ ->
-            val product = products[position]
+        tvCatalogTitle.text =
+            if (nomUtilisateur.isNotBlank()) {
+                "Bienvenue $nomUtilisateur ! Voici nos produits"
+            } else {
+                "Notre catalogue"
+            }
+
+        tvCatalogTitle.visibility = View.VISIBLE
+        listViewProducts.visibility = View.VISIBLE
+
+        chargerProduits()
+
+        listViewProducts.adapter = ProduitAdapter()
+
+        listViewProducts.setOnItemClickListener { _, _, position, _ ->
+            val produit = produits[position]
             Toast.makeText(
                 this,
-                "Produit sélectionné : ${product.name}",
+                "${produit.nom} : ${produit.prix} TND",
                 Toast.LENGTH_SHORT
             ).show()
         }
+    }
 
+    private fun chargerProduits() {
+        try {
+            val jsonString = assets.open("produits.json")
+                .bufferedReader()
+                .use { it.readText() }
 
-        val btnNext = findViewById<Button>(R.id.btnNext)
-        val catalog = findViewById<ListView>(R.id.listViewProducts)
-        val catalogTitle = findViewById<TextView>(R.id.tvCatalogTitle)
+            val jsonObject = JSONObject(jsonString)
+            val tableau = jsonObject.getJSONArray("produits")
 
-        btnNext.setOnClickListener {
-            catalogTitle.visibility = View.VISIBLE
-            catalog.visibility = View.VISIBLE
-            btnNext.visibility = View.GONE
+            produits.clear()
+
+            for (i in 0 until tableau.length()) {
+                val objet = tableau.getJSONObject(i)
+
+                produits.add(
+                    Produit(
+                        nom = objet.getString("nom"),
+                        prix = objet.getInt("prix"),
+                        image = objet.getString("image")
+                    )
+                )
+            }
+
+        } catch (e: Exception) {
+            Log.e("MiniShop", "Erreur de lecture du JSON", e)
+            Toast.makeText(
+                this,
+                "Erreur de chargement des produits",
+                Toast.LENGTH_LONG
+            ).show()
         }
-
     }
 
-    override fun onStart() {
-        super.onStart()
-        Log.d("LIFECYCLE", "onStart appelé")
-    }
+    private inner class ProduitAdapter : BaseAdapter() {
 
-    override fun onResume() {
-        super.onResume()
-        Log.d("LIFECYCLE", "onResume appelé")
-    }
+        override fun getCount(): Int = produits.size
 
-    override fun onPause() {
-        super.onPause()
-        Log.d("LIFECYCLE", "onPause appelé")
-    }
+        override fun getItem(position: Int): Produit =
+            produits[position]
 
-    override fun onStop() {
-        super.onStop()
-        Log.d("LIFECYCLE", "onStop appelé")
-    }
+        override fun getItemId(position: Int): Long =
+            position.toLong()
 
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.d("LIFECYCLE", "onDestroy appelé")
-    }
-}
+        override fun getView(
+            position: Int,
+            convertView: View?,
+            parent: ViewGroup
+        ): View {
+            val view = convertView ?: LayoutInflater.from(this@MainActivity)
+                .inflate(R.layout.item_product, parent, false)
 
-class ProductAdapter(
-    context: Context,
-    private val products: List<Product>
-) : ArrayAdapter<Product>(context, 0, products) {
+            val imgProduct =
+                view.findViewById<ImageView>(R.id.imgProduct)
+            val txtProduct =
+                view.findViewById<TextView>(R.id.txtProduct)
 
-    override fun getView(
-        position: Int,
-        convertView: View?,
-        parent: ViewGroup
-    ): View {
-        val view = convertView ?: LayoutInflater.from(context)
-            .inflate(R.layout.item_product, parent, false)
+            val produit = getItem(position)
 
-        val product = products[position]
+            txtProduct.text = "${produit.nom} — ${produit.prix} TND"
 
-        val image = view.findViewById<ImageView>(R.id.imgProduct)
-        val name = view.findViewById<TextView>(R.id.txtProduct)
+            val imageId = resources.getIdentifier(
+                produit.image,
+                "drawable",
+                packageName
+            )
 
-        image.setImageResource(product.image)
-        name.text = product.name
+            if (imageId != 0) {
+                imgProduct.setImageResource(imageId)
+            } else {
+                imgProduct.setImageDrawable(null)
+            }
 
-        return view
+            return view
+        }
     }
 }
